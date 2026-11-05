@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -39,6 +41,13 @@ def test_help_with_non_utf8_stdio() -> None:
     decoded = result.stdout.decode("utf-8")
     assert "usage: sizy" in decoded
     assert "директория для сканирования" in decoded
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows drive semantics")
+def test_bare_drive_is_expanded_to_root() -> None:
+    from sizy import _normalize_path
+
+    assert _normalize_path("C:") == os.path.abspath("C:" + os.sep)
 
 
 def test_missing_directory_is_rejected(tmp_path: Path) -> None:

@@ -5,16 +5,58 @@ from __future__ import annotations
 import os
 import threading
 from pathlib import Path
+from stat import S_IFDIR, S_IFREG
 
 import pytest
 
-from sizy.scanner import Scanner
+from sizy.scanner import Entry, Scanner
 
 
 def make_file(path: Path, size: int) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"x" * size)
     return path
+
+
+class FakeDirEntry:
+    """Minimal os.DirEntry stand-in with configurable stat data."""
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        is_dir: bool,
+        st_dev: int = 0,
+        st_ino: int = 0,
+        st_nlink: int = 0,
+        st_size: int = 0,
+    ) -> None:
+        self.name = path.name
+        self.path = str(path)
+        self._is_dir = is_dir
+        self._stat = os.stat_result(
+            (
+                (S_IFDIR | 0o755) if is_dir else (S_IFREG | 0o644),
+                st_ino,
+                st_dev,
+                st_nlink,
+                0,
+                0,
+                st_size,
+                0,
+                0,
+                0,
+            )
+        )
+
+    def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+        return self._stat
+
+    def is_symlink(self) -> bool:
+        return False
+
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+        return self._is_dir
 
 
 def test_scan_aggregates_sizes_and_items(tmp_path: Path) -> None:
@@ -61,6 +103,75 @@ def test_missing_root_is_an_error(tmp_path: Path) -> None:
     assert result.root.size == 0
     assert result.root.items == 0
     assert result.cancelled is False
+
+
+def test_zero_device_is_treated_as_same_filesystem(tmp_path: Path) -> None:
+    """Windows DirEntry.stat() returns st_dev=0; directories must not vanish."""
+    scanner = Scanner(str(tmp_path))
+    scanner._root_device = 12345
+    parent = Entry(name=tmp_path.name, path=str(tmp_path), is_dir=True)
+
+    child = scanner._handle_dirent(
+        parent, FakeDirEntry(tmp_path / "sub", is_dir=True, st_dev=0)
+    )
+
+    assert child is not None
+    assert child.is_dir is True
+    assert parent.children == [child]
+
+
+def test_other_nonzero_device_is_skipped(tmp_path: Path) -> None:
+    scanner = Scanner(str(tmp_path))
+    scanner._root_device = 12345
+    parent = Entry(name=tmp_path.name, path=str(tmp_path), is_dir=True)
+
+    child = scanner._handle_dirent(
+        parent, FakeDirEntry(tmp_path / "mount", is_dir=True, st_dev=999)
+    )
+
+    assert child is None
+    assert parent.children == []
+
+
+def test_zero_inode_disables_hardlink_dedup(tmp_path: Path) -> None:
+    """On Windows st_ino is 0 for every entry; don't merge unrelated files."""
+    scanner = Scanner(str(tmp_path))
+    parent = Entry(name=tmp_path.name, path=str(tmp_path), is_dir=True)
+
+    for name in ("a.bin", "b.bin"):
+        scanner._handle_dirent(
+            parent,
+            FakeDirEntry(
+                tmp_path / name,
+                is_dir=False,
+                st_dev=0,
+                st_ino=0,
+                st_nlink=2,
+                st_size=10,
+            ),
+        )
+
+    assert parent.size == 20
+
+
+def test_hardlink_dedup_uses_inode_when_available(tmp_path: Path) -> None:
+    scanner = Scanner(str(tmp_path))
+    parent = Entry(name=tmp_path.name, path=str(tmp_path), is_dir=True)
+
+    for name in ("a.bin", "b.bin"):
+        scanner._handle_dirent(
+            parent,
+            FakeDirEntry(
+                tmp_path / name,
+                is_dir=False,
+                st_dev=1,
+                st_ino=777,
+                st_nlink=2,
+                st_size=10,
+            ),
+        )
+
+    assert parent.size == 10
 
 
 def test_hardlinks_are_counted_once(tmp_path: Path) -> None:

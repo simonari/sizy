@@ -151,8 +151,12 @@ class Scanner:
             parent.errors += 1
             return None
 
-        if is_dir and self.one_filesystem and self._root_device is not None:
-            if stat.st_dev != self._root_device:
+        if is_dir and self.one_filesystem and self._root_device:
+            # On Windows DirEntry.stat() reports st_dev == 0 (see the
+            # os.scandir docs), while os.stat() on the root returns the real
+            # volume serial number. Treat an unknown device as "same
+            # filesystem": otherwise every directory would be skipped.
+            if stat.st_dev and stat.st_dev != self._root_device:
                 return None
 
         child = Entry(
@@ -169,7 +173,9 @@ class Scanner:
 
         size = stat.st_size
         disk = _allocated_size(stat)
-        if not is_symlink and stat.st_nlink > 1:
+        # st_nlink/st_ino are zero in DirEntry.stat() on Windows, so hard-link
+        # deduplication only works where the OS provides real inode data.
+        if not is_symlink and stat.st_nlink > 1 and stat.st_ino:
             key = (stat.st_dev, stat.st_ino)
             if key in self._seen_links:
                 # Same inode counted already: it takes no extra space.

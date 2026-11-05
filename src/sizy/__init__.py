@@ -24,6 +24,20 @@ def _configure_stdio() -> None:
             pass
 
 
+def _normalize_path(path: str) -> str:
+    """Normalize a user-supplied path.
+
+    On Windows ``C:`` means "the current directory on drive C", while users
+    almost always mean the drive root. A bare drive is therefore expanded to
+    ``C:\\``.
+    """
+    path = os.path.expanduser(path)
+    drive, tail = os.path.splitdrive(path)
+    if drive and not tail:
+        path = drive + os.sep
+    return os.path.abspath(path)
+
+
 def main() -> None:
     _configure_stdio()
     parser = argparse.ArgumentParser(
@@ -38,7 +52,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    path = os.path.abspath(os.path.expanduser(args.path))
+    path = _normalize_path(args.path)
     if not os.path.isdir(path):
         parser.error(f"не найдена директория: {path}")
 
