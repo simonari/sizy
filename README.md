@@ -45,6 +45,36 @@ python -m sizy PATH    # то же самое
 Сканирование идёт в фоновом потоке, интерфейс при этом не блокируется:
 прогресс и текущая обрабатываемая папка отображаются в статусной строке.
 
+## Готовые бинарники
+
+Standalone-сборки не требуют установленного Python. GitHub Actions собирает
+их на трёх ОС и прикрепляет к релизу при пуше тега:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Артефакты (`sizy-macos-arm64`, `sizy-linux-x86_64`,
+`sizy-windows-x86_64.exe`) также доступны на вкладке Actions.
+
+Локальная сборка под текущую ОС — PyInstaller не умеет кросс-компиляцию:
+
+```bash
+uv sync
+uv run python scripts/build.py
+```
+
+Результат: `dist/sizy-<os>-<arch>` (на Windows — `.exe`), около 16 MiB.
+Linux-бинарник собирается на Ubuntu 22.04 ради совместимости по glibc;
+macOS-сборка — Apple Silicon (Intel нужно собрать локально).
+
+Если macOS блокирует скачанный файл:
+
+```bash
+xattr -d com.apple.quarantine ./sizy-macos-arm64
+```
+
 ## Тесты
 
 ```bash
@@ -67,4 +97,10 @@ tests/
 ├── test_scanner.py  # сканер: размеры, ссылки, ошибки, отмена
 ├── test_app.py      # TUI: навигация, сортировка, пересканирование
 └── test_cli.py      # аргументы командной строки
+
+scripts/
+├── entrypoint.py    # точка входа для PyInstaller
+└── build.py         # сборка бинарника под текущую ОС
+
+.github/workflows/build.yml  # тесты, сборка под 3 ОС, релиз по тегу
 ```
