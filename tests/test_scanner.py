@@ -174,6 +174,10 @@ def test_hardlink_dedup_uses_inode_when_available(tmp_path: Path) -> None:
     assert parent.size == 10
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="DirEntry.stat() does not expose st_nlink/st_ino on Windows",
+)
 def test_hardlinks_are_counted_once(tmp_path: Path) -> None:
     original = make_file(tmp_path / "original.bin", 4_096)
     try:
