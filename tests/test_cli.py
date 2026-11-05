@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,22 @@ def test_help() -> None:
     assert result.returncode == 0
     assert "usage: sizy" in result.stdout
     assert "директория для сканирования" in result.stdout
+
+
+def test_help_with_non_utf8_stdio() -> None:
+    """Reproduce Windows CI: redirected output defaults to cp1252."""
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [sys.executable, "-m", "sizy", "--help"],
+        capture_output=True,
+        env=env,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+    decoded = result.stdout.decode("utf-8")
+    assert "usage: sizy" in decoded
+    assert "директория для сканирования" in decoded
 
 
 def test_missing_directory_is_rejected(tmp_path: Path) -> None:

@@ -75,6 +75,15 @@ macOS-сборка — Apple Silicon (Intel нужно собрать локал
 xattr -d com.apple.quarantine ./sizy-macos-arm64
 ```
 
+### Windows
+
+`sizy-windows-x86_64.exe` — консольное приложение для Windows 10 и 11 (x64);
+Python 3.14, на котором оно собрано, требует Windows 10 или новее.
+Лучше запускать в Windows Terminal: в Windows 11 он стоит по умолчанию,
+для Windows 10 устанавливается из Microsoft Store. В классическом conhost
+программа тоже работает, но палитра цветов и поддержка мыши будут скромнее.
+На Windows 11 ARM64 x64-бинарник запускается через эмуляцию.
+
 ## Тесты
 
 ```bash

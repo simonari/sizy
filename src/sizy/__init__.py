@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+
+
+def _configure_stdio() -> None:
+    """Force UTF-8 on stdout/stderr.
+
+    On Windows, redirected output (pipes, files, CI) defaults to the ANSI
+    code page, which cannot encode Russian text in ``--help``. Reconfiguring
+    to UTF-8 makes console and redirected output behave the same.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
 
 
 def main() -> None:
+    _configure_stdio()
     parser = argparse.ArgumentParser(
         prog="sizy",
         description="Интерактивный обзор размеров файлов и папок в терминале.",
